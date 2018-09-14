@@ -565,11 +565,26 @@ gettmarg(PyObject *args, struct tm *p, const char *format)
     if (Py_TYPE(args) == &StructTimeType) {
         PyObject *item;
         item = PyTuple_GET_ITEM(args, 9);
-        p->tm_zone = item == Py_None ? NULL : (char*)PyUnicode_AsUTF8(item);
+        if (item != Py_None) {
+            p->tm_zone = PyUnicode_AsUTF8(item);
+            if (p->tm_zone == NULL) {
+                return 0;
+            }
+            // Make an attempt to return the C library's own timezone strings to
+            // it. musl refuses to process a tm_zone field unless it produced
+            // it. See issue #34672.
+            if (tzname[0] && strcmp(p->tm_zone, tzname[0]) == 0) {
+                p->tm_zone = tzname[0];
+            } else if (tzname[1] && strcmp(p->tm_zone, tzname[1]) == 0) {
+                p->tm_zone = tzname[1];
+            }
+        }
         item = PyTuple_GET_ITEM(args, 10);
-        p->tm_gmtoff = item == Py_None ? 0 : PyLong_AsLong(item);
-        if (PyErr_Occurred())
-            return 0;
+        if (item != Py_None) {
+            p->tm_gmtoff = PyLong_AsLong(item);
+            if (PyErr_Occurred())
+                return 0;
+        }
     }
 #endif /* HAVE_STRUCT_TM_TM_ZONE */
     return 1;
